@@ -34,7 +34,7 @@ object ActorIntro extends App {
   wordCounter ! "learning akka"
   anotherWordCounter ! "A different message"
 
-
+  // best way to pass values to an Actor
   object Person {
     def props(name:String) = Props(new Person(name))
   }
