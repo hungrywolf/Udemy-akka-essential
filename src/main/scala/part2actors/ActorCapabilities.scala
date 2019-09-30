@@ -99,9 +99,63 @@ object ActorCapabilities extends App {
 
   counter ! Print
 
-
+  // ================================================================================
   //bank account
-  
+  object BankAccount {
+    case class Deposit(amount: Int)
+    case class Withdraw(amount: Int)
+    case object Statement
+
+    case class TransactionSuccess(msg:String)
+    case class TransactionFailure(msg:String)
+  }
+
+  class BankAccount extends Actor {
+    import BankAccount._
+
+    var funds = 0
+
+    override def receive: Receive = {
+      case Deposit(amount) =>
+        if(amount < 0) sender() ! TransactionFailure("invalid deposit amount")
+        else {
+          funds += amount
+          sender() ! TransactionSuccess(s"successfully deposit $amount")
+        }
+      case Withdraw(amount) =>
+        if(amount < 0) sender() ! TransactionFailure("invalid withdraw amount")
+        else if(amount > funds) sender() ! TransactionFailure("insufficient funds")
+        else {
+          funds -= amount
+          sender() ! TransactionSuccess(s"successfully withdraw $amount")
+        }
+      case Statement => sender() ! s"Your balance is $funds"
+    }
+  }
 
 
+  object Person {
+    case class LiveTheLife(account: ActorRef)
+  }
+
+  class Person extends Actor {
+    import Person._
+    import BankAccount._
+
+    override def receive: Receive = {
+      case LiveTheLife(account) =>
+        account ! Deposit(10000)
+        account ! Withdraw(900000)
+        account ! Withdraw(900)
+        account ! Statement
+      case msg => println(msg.toString)
+    }
+  }
+
+  import Person._
+
+  val account = system.actorOf(Props[BankAccount], "BankAccount")
+  val person = system.actorOf(Props[Person], "Person")
+
+  person ! LiveTheLife(account)
 }
