@@ -1,6 +1,6 @@
 package part4faulttolerance
 
-import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
+import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Kill, PoisonPill, Props, Terminated}
 
 object StartStoppingActor extends App {
 
@@ -40,6 +40,10 @@ object StartStoppingActor extends App {
   }
 
   import Parent._
+
+  /**
+    * method #1 - using context stop
+    */
   val parent = system.actorOf(Props[Parent], "parent")
   parent ! StartChild("child1")
 
@@ -58,4 +62,42 @@ object StartStoppingActor extends App {
   for(_ <- 1 to 10) parent ! "parent, are you still there"
   for(i <- 1 to 100) child2 ! s"[$i] second kid, are you still there"
 
+  /**
+    * method #2 - usin g special messages
+    */
+  val looseActor = system.actorOf(Props[Child])
+  looseActor ! "hi, loose actor"
+  looseActor ! PoisonPill
+  looseActor ! "loose actor, are you still there?"
+
+  /**
+    * method #3 -
+    */
+  val abruptlyTerminatedActor = system.actorOf(Props[Child])
+  abruptlyTerminatedActor ! "you are about to be terminated"
+  abruptlyTerminatedActor ! Kill
+  abruptlyTerminatedActor ! "you have been terminated"
+
+  /**
+    * Death watch
+    */
+  class Watcher extends Actor with ActorLogging {
+    import Parent._
+
+    override def receive: Receive = {
+      case StartChild(name) =>
+        val child = context.actorOf(Props[Child],name)
+        log.info(s"Started and watching child $name")
+        context.watch(child)
+      case Terminated(ref) =>
+        log.info(s"the ref that I'm watching $ref has been stopped")
+    }
+  }
+
+  val watcher = system.actorOf(Props[Watcher],"watcher")
+  watcher ! StartChild("watchedChild")
+  val watchedChild = system.actorSelection("/user/watcher/watchedChild")
+  Thread.sleep(500)
+
+  watchedChild ! PoisonPill
 }
